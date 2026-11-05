@@ -1,58 +1,86 @@
 name: Security checks
+
 on:
-push:
-branches: [main]
-pull_request:
-schedule:
-- cron: &quot;0 6 * * 1&quot; # also every Monday 06:00 UTC, catches new CVEs
-workflow_dispatch: # adds a &quot;Run workflow&quot; button
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "0 6 * * 1"   # also every Monday 06:00 UTC, catches new CVEs
+  workflow_dispatch:      # adds a "Run workflow" button
+
 permissions:
-contents: read
+  contents: read
+
 jobs:
-secrets:
-name: Secret scan (Gitleaks)
-runs-on: ubuntu-latest
-steps:
-- uses: actions/checkout@v4
-with:
-fetch-depth: 0 # scan full history, not just the last commit
-- uses: gitleaks/gitleaks-action@v2
-env:
-GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-sast:
-name: Code scan (Semgrep)
-runs-on: ubuntu-latest
-container: semgrep/semgrep
-steps:
-- uses: actions/checkout@v4
-- run: semgrep scan --config p/default --config p/secrets --error
-deps-and-files:
-name: Dependency &amp; config scan (Trivy)
-runs-on: ubuntu-latest
-steps:
-- uses: actions/checkout@v4
-- uses: aquasecurity/trivy-action@0.28.0
-with:
-scan-type: fs
-scanners: vuln,secret,misconfig # CVEs in deps, secrets, Dockerfile/IaC issues
-severity: HIGH,CRITICAL
-exit-code: &quot;1&quot; # fail the run on findings
-ignore-unfixed: true
+  secrets:
+    name: Secret scan (Gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0          # scan full history, not just the last commit
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-GitHub Actions security checks · Page 2
+  sast:
+    name: Code scan (Semgrep)
+    runs-on: ubuntu-latest
+    container: semgrep/semgrep
+    steps:
+      - uses: actions/checkout@v4
+      - run: semgrep scan --config p/default --config p/secrets --error
 
-codeql:
-name: CodeQL
-runs-on: ubuntu-latest
-permissions:
-security-events: write
-contents: read
-strategy:
-matrix:
-language: [python] # or javascript-typescript, go, java, etc.
-steps:
-- uses: actions/checkout@v4
-- uses: github/codeql-action/init@v3
-with:
-languages: ${{ matrix.language }}
-- uses: github/codeql-action/analyze@v3
+  deps-and-files:
+    name: Dependency & config scan (Trivy)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: fs
+          scanners: vuln,secret,misconfig   # CVEs in deps, secrets, Dockerfile/IaC issues
+          severity: HIGH,CRITICAL
+          exit-code: "1"                    # fail the run on findings
+          ignore-unfixed: true
+
+  codeql:
+    name: CodeQL
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      contents: read
+    strategy:
+      matrix:
+        language: [python]      # or javascript-typescript, go, java, etc.
+    steps:
+      - uses: actions/checkout@v4
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+      - uses: github/codeql-action/analyze@v3
+
+  # ---------------------------------------------------------------------------
+  # Optional: uncomment the job that matches your stack.
+  # ---------------------------------------------------------------------------
+
+  # python:
+  #   name: Python (Bandit + pip-audit)
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: actions/setup-python@v5
+  #       with: { python-version: "3.12" }
+  #     - run: pip install bandit pip-audit
+  #     - run: bandit -r . -ll -x ./tests,./.venv
+  #     - run: pip-audit -r requirements.txt
+
+  # node:
+  #   name: Node (npm audit)
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: actions/setup-node@v4
+  #       with: { node-version: 20 }
+  #     - run: npm ci
+  #     - run: npm audit --audit-level=high
